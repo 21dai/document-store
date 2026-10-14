@@ -1,0 +1,28 @@
+# Entornos virtuales y dependencias
+.venv/
+venv/
+
+# Variables de entorno (nunca commitear credenciales reales)
+.env
+.env.*
+!.env.example
+
+# Artefactos de Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+
+# Tests y herramientas
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# IDEs y SO
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

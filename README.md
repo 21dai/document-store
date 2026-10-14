@@ -6,8 +6,9 @@ Microservicio responsable de persistir y administrar documentos procesados.
 
 En desarrollo.
 
-La arquitectura y el contrato HTTP fueron definidos, pero el microservicio
-todavía está siendo implementado.
+El contrato HTTP está definido en [`docs/api-contract.md`](docs/api-contract.md)
+(Issue #1) y la arquitectura inicial del servicio ya está implementada
+(Issue #2). Los endpoints CRUD se implementan en los issues #3 a #7.
 
 ## Responsabilidad
 
@@ -35,40 +36,73 @@ todavía está siendo implementado.
 La extracción de texto es responsabilidad de `pdf-extractext` y la coordinación
 del flujo es responsabilidad de `orchestrator-service`.
 
-## Arquitectura prevista
+## Arquitectura
+
+El servicio sigue una arquitectura de tres capas con inyección de
+dependencias:
 
 ```text
 HTTP Router
     ↓
 Service
     ↓
-Repository
+Repository (interfaz ABC)
     ↓
-MongoDB
+MongoDB (implementación con PyMongo async)
 ```
 
-## Estructura prevista
+- **Router** (`app/routers/`): adapta HTTP, valida requests con schemas
+  Pydantic y delega en la capa de servicio.
+- **Service** (`app/services/`): contiene la lógica de negocio y depende solo
+  de la abstracción `DocumentRepository` (principio de inversión de
+  dependencias).
+- **Repository** (`app/repositories/`): define el puerto
+  `DocumentRepository` (ABC) y su implementación `MongoDocumentRepository`
+  con PyMongo asíncrono.
+- Las dependencias se arman en `app/dependencies.py` mediante `Depends` de
+  FastAPI.
+
+## Estructura del proyecto
 
 ```text
-app/
-├── main.py
-├── config.py
-├── dependencies.py
-├── routers/
-├── services/
-├── repositories/
-├── models/
-├── schemas/
-└── utils/
-
-tests/
-├── unit/
-└── integration/
+document-store/
+├── app/
+│   ├── main.py            # app FastAPI, lifespan de MongoDB, routers
+│   ├── config.py          # Settings con pydantic-settings (.env)
+│   ├── dependencies.py    # inyección: Settings → DB → Repository → Service
+│   ├── routers/
+│   │   ├── health.py
+│   │   └── documents.py
+│   ├── services/
+│   │   └── document_service.py
+│   ├── repositories/
+│   │   ├── document_repository.py        # interfaz (ABC)
+│   │   └── mongo_document_repository.py  # implementación MongoDB
+│   ├── models/
+│   │   └── document.py                   # entidad de dominio
+│   ├── schemas/
+│   │   ├── document.py                   # DTOs Pydantic (Create/Update/Response)
+│   │   └── error.py                      # ProblemDetail (RFC 9457)
+│   └── utils/
+├── tests/
+│   ├── unit/
+│   └── integration/
+│       └── test_health.py
+├── docs/
+│   └── api-contract.md    # contrato HTTP (Issue #1)
+├── main.py                # entrypoint de conveniencia para desarrollo
+├── pyproject.toml
+├── uv.lock
+├── .python-version        # 3.14
+├── .env.example
+├── .gitignore
+├── Dockerfile
+└── README.md
 ```
 
-## API prevista
+## API
 
-La API se expondrá bajo el prefijo:
+La API se expone bajo el prefijo:
 
 ```text
 /api/v1
@@ -85,7 +119,11 @@ Endpoints previstos:
 | PUT | `/api/v1/documents/{document_id}` | Actualizar un documento |
 | DELETE | `/api/v1/documents/{document_id}` | Eliminar un documento |
 
-El contrato HTTP definitivo se encuentra documentado en el Issue #1.
+El contrato HTTP completo (requests, responses, errores y reglas de negocio)
+está documentado en [`docs/api-contract.md`](docs/api-contract.md) (Issue #1).
+
+Con la aplicación en ejecución, la documentación interactiva generada por
+FastAPI está disponible en `/docs` (Swagger UI) y `/openapi.json`.
 
 ## Persistencia
 
@@ -109,22 +147,80 @@ vez.
 
 ## Configuración
 
-Las variables de entorno se documentarán en:
+Las variables de entorno están documentadas en `.env.example`. Para correr el
+proyecto localmente, copiá el archivo y ajustá los valores según tu entorno:
 
-```text
-.env.example
+```bash
+cp .env.example .env
 ```
 
-No se deben commitear credenciales reales ni archivos `.env`.
+No se deben commitear credenciales reales ni archivos `.env` (el `.gitignore`
+ya los excluye).
+
+Variables disponibles:
+
+| Variable | Default | Descripción |
+|---|---|---|
+| `APP_NAME` | `document-store` | Nombre de la aplicación |
+| `APP_VERSION` | `0.1.0` | Versión expuesta en OpenAPI |
+| `DEBUG` | `false` | Modo debug / recarga automática |
+| `HOST` | `0.0.0.0` | Host del servidor |
+| `PORT` | `8000` | Puerto del servidor |
+| `API_V1_PREFIX` | `/api/v1` | Prefijo de la API |
+| `MONGO_URI` | `mongodb://localhost:27017` | URI de conexión a MongoDB |
+| `MONGO_DB_NAME` | `document_store` | Nombre de la base de datos |
 
 ## Desarrollo local
 
-Los comandos definitivos de instalación y ejecución se agregarán cuando se
-complete la inicialización del proyecto con `uv`.
+### Requisitos
 
-La aplicación deberá poder ejecutarse posteriormente con FastAPI y Uvicorn.
+- [uv](https://docs.astral.sh/uv/) instalado (`uv` gestiona automáticamente
+  Python 3.14, definido en `.python-version`).
+- MongoDB disponible en `MONGO_URI` (necesario solo cuando se implementen los
+  endpoints de documentos en los issues #3 a #7; el `/health` no lo requiere).
+
+### Instalación
+
+```bash
+uv sync
+```
+
+### Ejecución
+
+Con uvicorn (recomendado):
+
+```bash
+uv run uvicorn app.main:app --reload
+```
+
+O mediante el entrypoint de conveniencia:
+
+```bash
+uv run python main.py
+```
+
+Luego verificá el healthcheck:
+
+```bash
+curl http://localhost:8000/health
+# {"status":"ok"}
+```
+
+### Docker
+
+```bash
+docker build -t document-store .
+docker run --rm -p 8000:8000 --env-file .env document-store
+```
+
+La configuración completa de Docker, healthcheck y CI se aborda en el
+issue #9.
 
 ## Tests
+
+```bash
+uv run pytest
+```
 
 El proyecto tendrá:
 
