@@ -10,6 +10,7 @@ from pymongo.asynchronous.database import AsyncDatabase
 from pymongo.errors import PyMongoError
 
 from app.config import Settings, get_settings
+from app.errors import register_error_handlers
 from app.repositories.mongo_document_repository import ensure_indexes
 from app.routers import documents, health
 
@@ -76,6 +77,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         lifespan=lifespan,
     )
     app.state.settings = settings
+    register_error_handlers(app)
 
     app.include_router(health.router)
     app.include_router(documents.router, prefix=settings.api_v1_prefix)

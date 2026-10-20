@@ -108,16 +108,33 @@ La API se expone bajo el prefijo:
 /api/v1
 ```
 
-Endpoints previstos:
+Endpoints:
 
 | Método | Endpoint | Descripción |
 |---|---|---|
 | GET | `/health` | Verificar que el servicio está activo |
-| POST | `/api/v1/documents` | Crear un documento |
+| POST | `/api/v1/documents` | Crear un documento (implementado) |
 | GET | `/api/v1/documents` | Listar documentos |
 | GET | `/api/v1/documents/{document_id}` | Obtener un documento |
 | PUT | `/api/v1/documents/{document_id}` | Actualizar un documento |
 | DELETE | `/api/v1/documents/{document_id}` | Eliminar un documento |
+
+### Crear un documento
+
+```bash
+curl -X POST http://localhost:8000/api/v1/documents \n  -H "Content-Type: application/json" \n  -d '{"name": "Filosofia Lean", "original_filename": "Filosofia Lean.pdf",
+       "checksum": "<sha256 de 64 caracteres hex en minúsculas>",
+       "file_size": 734000, "page_count": 42,
+       "extracted_text": "Texto extraído...", "is_processed": true}'
+```
+
+| Respuesta | Cuándo |
+|---|---|
+| `201 Created` | Se guardó; el cuerpo es el documento con su `id` entero y las fechas en UTC |
+| `400 Bad Request` | Falta un campo, un tipo es incorrecto (validación estricta), el checksum no es SHA-256 o el JSON está mal formado |
+| `409 Conflict` | Ya existe un documento con el mismo `checksum` |
+
+Los errores usan **RFC 9457 Problem Details** (`application/problem+json`).
 
 El contrato HTTP completo (requests, responses, errores y reglas de negocio)
 está documentado en [`docs/api-contract.md`](docs/api-contract.md) (Issue #1).

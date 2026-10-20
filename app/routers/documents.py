@@ -1,11 +1,19 @@
+from typing import Any
+
 from fastapi import APIRouter, HTTPException, Query, status
 
 from app.dependencies import DocumentServiceDep
 from app.schemas.document import DocumentCreate, DocumentResponse, DocumentUpdate
+from app.schemas.error import ProblemDetail
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
-_NOT_IMPLEMENTED_DETAIL = "Este endpoint se implementa en un issue posterior (#4 a #7)."
+_NOT_IMPLEMENTED_DETAIL = "Este endpoint se implementa en un issue posterior (#5 a #7)."
+
+#: Respuestas de error documentadas en OpenAPI (cuerpo RFC 9457).
+_BAD_REQUEST: dict[int | str, dict[str, Any]] = {
+    status.HTTP_400_BAD_REQUEST: {"model": ProblemDetail}
+}
 
 
 @router.post(
@@ -13,16 +21,21 @@ _NOT_IMPLEMENTED_DETAIL = "Este endpoint se implementa en un issue posterior (#4
     response_model=DocumentResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Crear un documento",
+    responses={
+        **_BAD_REQUEST,
+        status.HTTP_409_CONFLICT: {
+            "model": ProblemDetail,
+            "description": "Ya existe un documento con el mismo checksum",
+        },
+    },
 )
 async def create_document(
     payload: DocumentCreate,
     service: DocumentServiceDep,
 ) -> DocumentResponse:
-    # Issue #4: Implementar creación de documentos.
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail=_NOT_IMPLEMENTED_DETAIL,
-    )
+    """Registra un documento ya procesado. El checksum debe ser único."""
+    document = await service.create_document(payload)
+    return DocumentResponse.model_validate(document)
 
 
 @router.get(

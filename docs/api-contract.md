@@ -105,6 +105,11 @@ POST /api/v1/documents
 | `extracted_text` | string | Requerido (puede ser string vacío) |
 | `is_processed` | boolean | Requerido |
 
+La validación es **estricta**: cada campo debe llegar con su tipo JSON (un número
+como texto, `"734000"`, o un booleano como `"true"` o `1` se rechazan con 400).
+Los espacios al principio y al final de `name` y `original_filename` se quitan
+antes de validar, así que un nombre solo con espacios es inválido.
+
 **Respuesta `201 Created`:**
 
 ```json

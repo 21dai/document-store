@@ -1,16 +1,28 @@
 from datetime import datetime
+from typing import Annotated
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 #: Formato del checksum: SHA-256 hexadecimal en minúsculas (64 caracteres).
 CHECKSUM_REGEX = r"^[a-f0-9]{64}$"
 
+#: Texto de 1 a 255 caracteres; los espacios de los extremos no cuentan.
+NonEmptyName = Annotated[
+    str, StringConstraints(strip_whitespace=True, min_length=1, max_length=255)
+]
+
 
 class DocumentCreate(BaseModel):
-    """Datos requeridos para crear un documento (contrato: POST /api/v1/documents)."""
+    """Datos requeridos para crear un documento (contrato: POST /api/v1/documents).
 
-    name: str = Field(min_length=1, max_length=255)
-    original_filename: str = Field(min_length=1, max_length=255)
+    Validación estricta: un número que llega como texto (`"734000"`) o un
+    booleano como `"true"` o `1` se rechaza en lugar de convertirse.
+    """
+
+    model_config = ConfigDict(strict=True)
+
+    name: NonEmptyName
+    original_filename: NonEmptyName
     checksum: str = Field(pattern=CHECKSUM_REGEX)
     file_size: int = Field(ge=0)
     page_count: int = Field(ge=0)
