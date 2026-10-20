@@ -28,7 +28,7 @@ class DocumentRepository(ABC):
 
     @abstractmethod
     async def list(self, skip: int, limit: int) -> list[Document]:
-        """Devuelve una página de documentos según skip/limit."""
+        """Devuelve una página de documentos según skip/limit, en orden de id."""
 
     @abstractmethod
     async def update(self, document: Document) -> Document | None:

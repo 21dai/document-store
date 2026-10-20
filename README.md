@@ -8,7 +8,8 @@ En desarrollo.
 
 El contrato HTTP está definido en [`docs/api-contract.md`](docs/api-contract.md)
 (Issue #1) y la arquitectura inicial del servicio ya está implementada
-(Issue #2). Los endpoints CRUD se implementan en los issues #3 a #7.
+(Issue #2). Ya funcionan la persistencia en MongoDB (#3), el alta (#4) y las
+consultas con paginación (#5); la actualización y el borrado llegan en #6 y #7.
 
 ## Responsabilidad
 
@@ -114,8 +115,8 @@ Endpoints:
 |---|---|---|
 | GET | `/health` | Verificar que el servicio está activo |
 | POST | `/api/v1/documents` | Crear un documento (implementado) |
-| GET | `/api/v1/documents` | Listar documentos |
-| GET | `/api/v1/documents/{document_id}` | Obtener un documento |
+| GET | `/api/v1/documents` | Listar documentos (implementado) |
+| GET | `/api/v1/documents/{document_id}` | Obtener un documento (implementado) |
 | PUT | `/api/v1/documents/{document_id}` | Actualizar un documento |
 | DELETE | `/api/v1/documents/{document_id}` | Eliminar un documento |
 
@@ -135,6 +136,19 @@ curl -X POST http://localhost:8000/api/v1/documents \n  -H "Content-Type: applic
 | `409 Conflict` | Ya existe un documento con el mismo `checksum` |
 
 Los errores usan **RFC 9457 Problem Details** (`application/problem+json`).
+
+### Consultar documentos
+
+```bash
+curl http://localhost:8000/api/v1/documents/1
+curl "http://localhost:8000/api/v1/documents?skip=0&limit=10"
+```
+
+| Respuesta | Cuándo |
+|---|---|
+| `200 OK` | El documento, o la página de documentos **en orden de `id` ascendente** (lista vacía si no hay) |
+| `400 Bad Request` | El id no es un entero positivo, o `skip`/`limit` están fuera de rango (`skip >= 0`, `1 <= limit <= 100`) |
+| `404 Not Found` | No existe un documento con ese id |
 
 El contrato HTTP completo (requests, responses, errores y reglas de negocio)
 está documentado en [`docs/api-contract.md`](docs/api-contract.md) (Issue #1).

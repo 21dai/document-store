@@ -149,6 +149,7 @@ de creación).
 
 | Código | Situación |
 |---|---|
+| `400 Bad Request` | El id no es un entero positivo (por ejemplo `abc`, `0` o `-5`) |
 | `404 Not Found` | No existe un documento con ese ID |
 
 ---
@@ -163,6 +164,10 @@ GET /api/v1/documents?skip=0&limit=10
 |---|---|---|---|
 | `skip` | integer (query) | `0` | `>= 0` |
 | `limit` | integer (query) | `10` | entre `1` y `100` |
+
+Los documentos se devuelven **ordenados por `id` ascendente**. Si no hay
+resultados, la respuesta es `200 OK` con una lista vacía. Un `skip` o `limit`
+fuera de rango o no numérico responde `400 Bad Request`.
 
 **Respuesta `200 OK`:**
 

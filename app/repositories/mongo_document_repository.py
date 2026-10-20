@@ -71,7 +71,9 @@ class MongoDocumentRepository(DocumentRepository):
         return from_mongo(data) if data else None
 
     async def list(self, skip: int, limit: int) -> list[Document]:
-        cursor = self._documents.find().skip(skip).limit(limit)
+        # Orden por id ascendente: sin sort, MongoDB no garantiza el orden y
+        # las páginas podrían repetir u omitir documentos.
+        cursor = self._documents.find().sort("id", ASCENDING).skip(skip).limit(limit)
         return [from_mongo(data) async for data in cursor]
 
     async def update(self, document: Document) -> Document | None:

@@ -11,7 +11,7 @@ from fastapi import FastAPI, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
-from app.exceptions import DocumentAlreadyExistsError
+from app.exceptions import DocumentAlreadyExistsError, DocumentNotFoundError
 from app.schemas.error import ProblemDetail
 
 PROBLEM_JSON = "application/problem+json"
@@ -51,7 +51,12 @@ async def _already_exists(request: Request, exc: Exception) -> JSONResponse:
     return problem_response(request, status.HTTP_409_CONFLICT, str(exc))
 
 
+async def _not_found(request: Request, exc: Exception) -> JSONResponse:
+    return problem_response(request, status.HTTP_404_NOT_FOUND, str(exc))
+
+
 def register_error_handlers(app: FastAPI) -> None:
     """Registra los handlers globales de errores."""
     app.add_exception_handler(RequestValidationError, _validation_error)
     app.add_exception_handler(DocumentAlreadyExistsError, _already_exists)
+    app.add_exception_handler(DocumentNotFoundError, _not_found)
