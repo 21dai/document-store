@@ -127,7 +127,14 @@ FastAPI está disponible en `/docs` (Swagger UI) y `/openapi.json`.
 
 ## Persistencia
 
-La información será almacenada en MongoDB.
+La información se almacena en MongoDB, en dos colecciones:
+
+- `documents`: un documento por PDF procesado, con **índices únicos** sobre
+  `id` y `checksum` (la base garantiza que no haya duplicados aunque lleguen
+  dos altas a la vez).
+- `counters`: la secuencia de ids, incrementada de forma atómica.
+
+Las fechas se guardan en UTC con precisión de milisegundos.
 
 El documento deberá incluir, como mínimo:
 
@@ -167,8 +174,9 @@ Variables disponibles:
 | `HOST` | `0.0.0.0` | Host del servidor |
 | `PORT` | `8000` | Puerto del servidor |
 | `API_V1_PREFIX` | `/api/v1` | Prefijo de la API |
-| `MONGO_URI` | `mongodb://localhost:27017` | URI de conexión a MongoDB |
-| `MONGO_DB_NAME` | `document_store` | Nombre de la base de datos |
+| `DATABASE_URL` | `mongodb://localhost:27017` | URI de conexión a MongoDB |
+| `DATABASE_NAME` | `document_store` | Nombre de la base de datos |
+| `DATABASE_TIMEOUT_MS` | `3000` | Timeout de conexión y de selección del servidor (ms) |
 
 ## Desarrollo local
 
@@ -176,8 +184,8 @@ Variables disponibles:
 
 - [uv](https://docs.astral.sh/uv/) instalado (`uv` gestiona automáticamente
   Python 3.14, definido en `.python-version`).
-- MongoDB disponible en `MONGO_URI` (necesario solo cuando se implementen los
-  endpoints de documentos en los issues #3 a #7; el `/health` no lo requiere).
+- MongoDB disponible en `DATABASE_URL` para los endpoints de documentos
+  (el `/health` no lo requiere).
 
 ### Instalación
 
@@ -220,6 +228,16 @@ issue #9.
 
 ```bash
 uv run pytest
+```
+
+Los tests de persistencia usan un MongoDB real: cada test crea una base con
+nombre único y la borra al terminar. Por defecto se conectan a
+`mongodb://localhost:27017`; se puede cambiar con `TEST_DATABASE_URL`. Si no
+hay MongoDB, esos tests se saltean con un aviso (con `REQUIRE_MONGO=1`
+fallan, para CI). Para levantar uno descartable:
+
+```bash
+docker run -d --rm --name document-store-test-mongo -p 27017:27017 mongo:7
 ```
 
 El proyecto tendrá:

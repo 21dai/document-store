@@ -13,10 +13,13 @@ class DocumentRepository(ABC):
 
     @abstractmethod
     async def create(self, document: Document) -> Document:
-        """Persiste un documento nuevo y lo devuelve."""
+        """Persiste un documento nuevo y lo devuelve con su id asignado.
+
+        Lanza DocumentAlreadyExistsError si ya existe uno con el mismo checksum.
+        """
 
     @abstractmethod
-    async def get_by_id(self, document_id: str) -> Document | None:
+    async def get_by_id(self, document_id: int) -> Document | None:
         """Devuelve el documento con ese ID, o None si no existe."""
 
     @abstractmethod
@@ -32,5 +35,5 @@ class DocumentRepository(ABC):
         """Actualiza los campos editables del documento y lo devuelve."""
 
     @abstractmethod
-    async def delete(self, document_id: str) -> bool:
+    async def delete(self, document_id: int) -> bool:
         """Elimina el documento. Devuelve True si existía."""

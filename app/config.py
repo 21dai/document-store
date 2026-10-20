@@ -19,8 +19,12 @@ class Settings(BaseSettings):
 
     api_v1_prefix: str = "/api/v1"
 
-    mongo_uri: str = "mongodb://localhost:27017"
-    mongo_db_name: str = "document_store"
+    # Conexión a MongoDB. El timeout (en milisegundos) se aplica a la
+    # conexión y a la selección del servidor: si MongoDB no responde, las
+    # operaciones fallan en ese tiempo en lugar de quedar colgadas.
+    database_url: str = "mongodb://localhost:27017"
+    database_name: str = "document_store"
+    database_timeout_ms: int = 3000
 
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 

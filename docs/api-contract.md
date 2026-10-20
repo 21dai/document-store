@@ -34,8 +34,8 @@ Responsabilidades:
   "type": "about:blank",
   "title": "Document not found",
   "status": 404,
-  "detail": "No document found with id 'b1f2c3d4-...'.",
-  "instance": "/api/v1/documents/b1f2c3d4-e5f6-7890-abcd-ef1234567890"
+  "detail": "No existe un documento con id 42.",
+  "instance": "/api/v1/documents/42"
 }
 ```
 
@@ -49,8 +49,11 @@ Responsabilidades:
 
 ### Identificador de documento
 
-- `document_id` es un **UUID v4** en formato string, generado por
-  `document-store` al momento de la creación.
+- `document_id` es un **entero positivo secuencial** (1, 2, 3, …) que
+  genera `document-store` al crear el documento (decisión del equipo, issue #3).
+- La secuencia se lleva en la colección `counters` con un incremento atómico,
+  así que dos altas simultáneas nunca reciben el mismo id. Un alta rechazada
+  (por ejemplo, checksum duplicado) puede dejar un hueco en la numeración.
 
 ## Endpoints
 
@@ -106,7 +109,7 @@ POST /api/v1/documents
 
 ```json
 {
-  "id": "b1f2c3d4-e5f6-7890-abcd-ef1234567890",
+  "id": 1,
   "name": "Filosofia Lean",
   "original_filename": "Filosofia Lean.pdf",
   "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -161,7 +164,7 @@ GET /api/v1/documents?skip=0&limit=10
 ```json
 [
   {
-    "id": "b1f2c3d4-e5f6-7890-abcd-ef1234567890",
+    "id": 1,
     "name": "Filosofia Lean",
     "original_filename": "Filosofia Lean.pdf",
     "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
@@ -225,7 +228,7 @@ El documento almacenado en MongoDB incluye, como mínimo:
 
 | Campo | Descripción |
 |---|---|
-| `id` | UUID v4 (string), identificador público del documento |
+| `id` | Entero secuencial, identificador público del documento (**índice único**) |
 | `name` | Nombre editable del documento |
 | `original_filename` | Nombre original del archivo PDF |
 | `checksum` | SHA-256 hexadecimal, **único** (índice único en MongoDB) |
@@ -233,8 +236,13 @@ El documento almacenado en MongoDB incluye, como mínimo:
 | `page_count` | Cantidad de páginas |
 | `extracted_text` | Texto extraído del PDF |
 | `is_processed` | Estado de procesamiento |
-| `created_at` | Fecha de creación (UTC) |
-| `updated_at` | Fecha de última actualización (UTC) |
+| `created_at` | Fecha de creación (UTC, precisión de milisegundos) |
+| `updated_at` | Fecha de última actualización (UTC, precisión de milisegundos) |
+
+Colecciones: `documents` (los documentos, con índices únicos `id_unico` y
+`checksum_unico`) y `counters` (la secuencia de ids). Los índices se crean al
+arrancar el servicio; si MongoDB no está disponible en ese momento, se crean
+en segundo plano apenas responda.
 
 ## Decisiones
 

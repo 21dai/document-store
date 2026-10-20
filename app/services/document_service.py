@@ -1,14 +1,7 @@
+from app.exceptions import DocumentAlreadyExistsError, DocumentNotFoundError
 from app.models.document import Document
 from app.repositories.document_repository import DocumentRepository
 from app.schemas.document import DocumentCreate, DocumentUpdate
-
-
-class DocumentAlreadyExistsError(Exception):
-    """Ya existe un documento con el mismo checksum (HTTP 409)."""
-
-
-class DocumentNotFoundError(Exception):
-    """No existe un documento con el ID indicado (HTTP 404)."""
 
 
 class DocumentService:
@@ -28,7 +21,7 @@ class DocumentService:
         document = Document(**payload.model_dump())
         return await self._repository.create(document)
 
-    async def get_document(self, document_id: str) -> Document:
+    async def get_document(self, document_id: int) -> Document:
         document = await self._repository.get_by_id(document_id)
         if document is None:
             raise DocumentNotFoundError(document_id)
@@ -37,7 +30,9 @@ class DocumentService:
     async def list_documents(self, skip: int, limit: int) -> list[Document]:
         return await self._repository.list(skip=skip, limit=limit)
 
-    async def update_document(self, document_id: str, payload: DocumentUpdate) -> Document:
+    async def update_document(
+        self, document_id: int, payload: DocumentUpdate
+    ) -> Document:
         document = await self.get_document(document_id)
         document.name = payload.name
         updated = await self._repository.update(document)
@@ -45,7 +40,7 @@ class DocumentService:
             raise DocumentNotFoundError(document_id)
         return updated
 
-    async def delete_document(self, document_id: str) -> None:
+    async def delete_document(self, document_id: int) -> None:
         deleted = await self._repository.delete(document_id)
         if not deleted:
             raise DocumentNotFoundError(document_id)

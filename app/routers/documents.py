@@ -48,7 +48,7 @@ async def list_documents(
     summary="Obtener un documento por ID",
 )
 async def get_document(
-    document_id: str,
+    document_id: int,
     service: DocumentServiceDep,
 ) -> DocumentResponse:
     # Issue #5: Implementar consultas y paginación.
@@ -64,7 +64,7 @@ async def get_document(
     summary="Actualizar campos editables de un documento",
 )
 async def update_document(
-    document_id: str,
+    document_id: int,
     payload: DocumentUpdate,
     service: DocumentServiceDep,
 ) -> DocumentResponse:
@@ -81,7 +81,7 @@ async def update_document(
     summary="Eliminar un documento",
 )
 async def delete_document(
-    document_id: str,
+    document_id: int,
     service: DocumentServiceDep,
 ) -> None:
     # Issue #7: Implementar eliminación.
