@@ -1,15 +1,17 @@
 """Repositorio MongoDB contra una base real y aislada (ver tests/conftest.py)."""
 
 import asyncio
+from dataclasses import replace
 
 import pytest
-from app.exceptions import DocumentAlreadyExistsError
 from pymongo.asynchronous.database import AsyncDatabase
 
+from app.exceptions import DocumentAlreadyExistsError
 from app.models.document import Document
 from app.repositories.mongo_document_repository import (
     MongoDocumentRepository,
     ensure_indexes,
+    to_mongo,
 )
 
 
@@ -107,3 +109,33 @@ async def test_buscar_algo_inexistente_devuelve_none(
 ) -> None:
     assert await repository.get_by_id(999) is None
     assert await repository.get_by_checksum("f" * 64) is None
+
+
+async def test_list_devuelve_los_documentos_ordenados_por_id(
+    repository: MongoDocumentRepository, mongo_database: AsyncDatabase
+) -> None:
+    # Se insertan al revés para que el orden no dependa del de inserción.
+    for index in (3, 1, 2):
+        document = make_document(f"{index:064x}", name=f"doc{index}")
+        await mongo_database["documents"].insert_one(
+            to_mongo(replace(document, id=index))
+        )
+
+    documents = await repository.list(skip=0, limit=10)
+
+    assert [d.id for d in documents] == [1, 2, 3]
+
+
+async def test_list_respeta_skip_y_limit(repository: MongoDocumentRepository) -> None:
+    for index in range(5):
+        await repository.create(make_document(f"{index:064x}", name=f"doc{index}"))
+
+    page = await repository.list(skip=1, limit=2)
+
+    assert [d.id for d in page] == [2, 3]
+
+
+async def test_list_sin_documentos_devuelve_lista_vacia(
+    repository: MongoDocumentRepository,
+) -> None:
+    assert await repository.list(skip=0, limit=10) == []
