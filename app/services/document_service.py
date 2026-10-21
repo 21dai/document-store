@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 from app.exceptions import DocumentAlreadyExistsError, DocumentNotFoundError
 from app.models.document import Document
 from app.repositories.document_repository import DocumentRepository
@@ -34,8 +36,8 @@ class DocumentService:
         self, document_id: int, payload: DocumentUpdate
     ) -> Document:
         document = await self.get_document(document_id)
-        document.name = payload.name
-        updated = await self._repository.update(document)
+        candidate = replace(document, name=payload.name)
+        updated = await self._repository.update(candidate)
         if updated is None:
             raise DocumentNotFoundError(document_id)
         return updated

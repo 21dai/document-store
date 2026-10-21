@@ -2,12 +2,14 @@
 
 import asyncio
 from dataclasses import replace
+from datetime import UTC, datetime
 
 import pytest
 from pymongo.asynchronous.database import AsyncDatabase
 
 from app.exceptions import DocumentAlreadyExistsError
 from app.models.document import Document
+from app.repositories import mongo_document_repository
 from app.repositories.mongo_document_repository import (
     MongoDocumentRepository,
     ensure_indexes,
@@ -139,3 +141,56 @@ async def test_list_sin_documentos_devuelve_lista_vacia(
     repository: MongoDocumentRepository,
 ) -> None:
     assert await repository.list(skip=0, limit=10) == []
+
+
+async def test_update_persiste_y_devuelve_solo_el_nombre_y_updated_at_modificados(
+    repository: MongoDocumentRepository,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    original_timestamp = datetime(2025, 1, 2, 3, 4, 5, 678000, tzinfo=UTC)
+    updated_timestamp = datetime(2026, 2, 3, 4, 5, 6, 789000, tzinfo=UTC)
+    original = replace(
+        make_document("1" * 64, name="nombre original"),
+        original_filename="archivo-original.pdf",
+        file_size=123_456,
+        page_count=27,
+        extracted_text="contenido que no debe cambiar",
+        is_processed=False,
+        created_at=original_timestamp,
+        updated_at=original_timestamp,
+    )
+    created = await repository.create(original)
+    monkeypatch.setattr(
+        mongo_document_repository, "utc_now", lambda: updated_timestamp
+    )
+
+    candidate = replace(
+        created,
+        name="nombre actualizado",
+        checksum="f" * 64,
+        original_filename="archivo-alterado.pdf",
+        file_size=1,
+        page_count=1,
+        extracted_text="contenido alterado",
+        is_processed=True,
+        created_at=datetime(2030, 1, 1, tzinfo=UTC),
+        updated_at=datetime(2030, 1, 1, tzinfo=UTC),
+    )
+
+    updated = await repository.update(candidate)
+
+    expected = replace(
+        created, name="nombre actualizado", updated_at=updated_timestamp
+    )
+    assert updated == expected
+    assert await repository.get_by_id(created.id) == expected
+
+
+async def test_update_de_id_inexistente_devuelve_none_y_no_hace_upsert(
+    repository: MongoDocumentRepository,
+    mongo_database: AsyncDatabase,
+) -> None:
+    missing = replace(make_document("2" * 64), id=999, name="no crear")
+
+    assert await repository.update(missing) is None
+    assert await mongo_database["documents"].count_documents({}) == 0

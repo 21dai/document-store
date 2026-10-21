@@ -36,7 +36,9 @@ class DocumentUpdate(BaseModel):
     En la primera versión solo se puede actualizar el nombre.
     """
 
-    name: str = Field(min_length=1, max_length=255)
+    model_config = ConfigDict(strict=True, extra="forbid")
+
+    name: NonEmptyName
 
 
 class DocumentResponse(BaseModel):

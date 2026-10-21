@@ -197,23 +197,49 @@ PUT /api/v1/documents/{document_id}
 ```
 
 En la primera versión **solo se puede actualizar el nombre**. Los demás campos
-(incluido el `checksum`) son inmutables.
+(incluido el `checksum`) son inmutables. El body rechaza cualquier campo
+adicional, incluso si `name` es válido.
 
 **Request** (`application/json`):
 
 ```json
 {
-  "name": "Nuevo nombre"
+  "name": "  Nuevo nombre  "
 }
 ```
 
+`name` es obligatorio y debe ser un string. Se quitan sus espacios iniciales y
+finales antes de validar la longitud de 1 a 255 caracteres. Se rechazan `null`,
+números, booleanos, arrays, objetos y nombres vacíos o compuestos solo por
+espacios. No se agregan restricciones sobre los caracteres del nombre.
+
 **Respuesta `200 OK`:** el documento actualizado completo.
+
+```json
+{
+  "id": 1,
+  "name": "Nuevo nombre",
+  "original_filename": "Filosofia Lean.pdf",
+  "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "file_size": 734000,
+  "page_count": 42,
+  "extracted_text": "Texto extraído del PDF...",
+  "is_processed": true,
+  "created_at": "2026-10-14T12:00:00Z",
+  "updated_at": "2026-10-21T15:30:00Z"
+}
+```
+
+La operación conserva `id`, `checksum`, `original_filename`, `file_size`,
+`page_count`, `extracted_text`, `is_processed` y `created_at`. El cliente no
+envía `updated_at`: el servidor lo asigna automáticamente en UTC con precisión
+de milisegundos.
 
 **Errores:**
 
 | Código | Situación |
 |---|---|
-| `400 Bad Request` | Datos inválidos (nombre vacío o ausente) |
+| `400 Bad Request` | El id no es un entero positivo; falta el body o `name`; el JSON, tipo, longitud o nombre son inválidos; o hay campos adicionales |
 | `404 Not Found` | No existe un documento con ese ID |
 
 ---

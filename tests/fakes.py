@@ -35,9 +35,12 @@ class InMemoryDocumentRepository(DocumentRepository):
         return ordered[skip : skip + limit]
 
     async def update(self, document: Document) -> Document | None:
-        if document.id not in self.documents:
+        if document.id is None:
             return None
-        updated = replace(document, updated_at=utc_now())
+        current = self.documents.get(document.id)
+        if current is None:
+            return None
+        updated = replace(current, name=document.name, updated_at=utc_now())
         self.documents[document.id] = updated
         return updated
 
