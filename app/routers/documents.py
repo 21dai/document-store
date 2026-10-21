@@ -6,7 +6,15 @@ from app.dependencies import DocumentServiceDep
 from app.schemas.document import DocumentCreate, DocumentResponse, DocumentUpdate
 from app.schemas.error import ProblemDetail
 
-router = APIRouter(prefix="/documents", tags=["documents"])
+#: Todas las operaciones usan MongoDB: si no responde, 503.
+_UNAVAILABLE: dict[int | str, dict[str, Any]] = {
+    status.HTTP_503_SERVICE_UNAVAILABLE: {
+        "model": ProblemDetail,
+        "description": "La base de datos no está disponible",
+    }
+}
+
+router = APIRouter(prefix="/documents", tags=["documents"], responses=_UNAVAILABLE)
 
 #: Id de documento en la ruta: entero positivo (si no, 400).
 DocumentId = Annotated[int, Path(gt=0, description="Id entero del documento")]

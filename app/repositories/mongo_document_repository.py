@@ -1,11 +1,13 @@
+from collections.abc import Iterator
+from contextlib import contextmanager
 from dataclasses import fields, replace
 from typing import Any
 
 from pymongo import ASCENDING, ReturnDocument
 from pymongo.asynchronous.database import AsyncDatabase
-from pymongo.errors import DuplicateKeyError
+from pymongo.errors import ConnectionFailure, DuplicateKeyError
 
-from app.exceptions import DocumentAlreadyExistsError
+from app.exceptions import DatabaseUnavailableError, DocumentAlreadyExistsError
 from app.models.document import Document, utc_now
 from app.repositories.document_repository import DocumentRepository
 
@@ -45,6 +47,20 @@ async def ensure_indexes(database: AsyncDatabase) -> None:
     )
 
 
+@contextmanager
+def _database_errors() -> Iterator[None]:
+    """Traduce la caída de MongoDB a `DatabaseUnavailableError`.
+
+    `ConnectionFailure` cubre servidor inalcanzable, timeout de selección y
+    red cortada. Los demás errores de PyMongo no son de disponibilidad y se
+    dejan pasar (terminan en 500).
+    """
+    try:
+        yield
+    except ConnectionFailure as exc:
+        raise DatabaseUnavailableError() from exc
+
+
 class MongoDocumentRepository(DocumentRepository):
     """Implementación de DocumentRepository sobre MongoDB (PyMongo async)."""
 
@@ -53,40 +69,46 @@ class MongoDocumentRepository(DocumentRepository):
         self._counters = database[COUNTERS]
 
     async def create(self, document: Document) -> Document:
-        new_document = replace(document, id=await self._next_id())
-        try:
-            await self._documents.insert_one(to_mongo(new_document))
-        except DuplicateKeyError as exc:
-            if "checksum" in (exc.details or {}).get("keyPattern", {}):
-                raise DocumentAlreadyExistsError(document.checksum) from exc
-            raise
+        with _database_errors():
+            new_document = replace(document, id=await self._next_id())
+            try:
+                await self._documents.insert_one(to_mongo(new_document))
+            except DuplicateKeyError as exc:
+                if "checksum" in (exc.details or {}).get("keyPattern", {}):
+                    raise DocumentAlreadyExistsError(document.checksum) from exc
+                raise
         return new_document
 
     async def get_by_id(self, document_id: int) -> Document | None:
-        data = await self._documents.find_one({"id": document_id})
+        with _database_errors():
+            data = await self._documents.find_one({"id": document_id})
         return from_mongo(data) if data else None
 
     async def get_by_checksum(self, checksum: str) -> Document | None:
-        data = await self._documents.find_one({"checksum": checksum})
+        with _database_errors():
+            data = await self._documents.find_one({"checksum": checksum})
         return from_mongo(data) if data else None
 
     async def list(self, skip: int, limit: int) -> list[Document]:
         # Orden por id ascendente: sin sort, MongoDB no garantiza el orden y
         # las páginas podrían repetir u omitir documentos.
         cursor = self._documents.find().sort("id", ASCENDING).skip(skip).limit(limit)
-        return [from_mongo(data) async for data in cursor]
+        with _database_errors():
+            return [from_mongo(data) async for data in cursor]
 
     async def update(self, document: Document) -> Document | None:
         updated_at = utc_now()
-        data = await self._documents.find_one_and_update(
-            {"id": document.id},
-            {"$set": {"name": document.name, "updated_at": updated_at}},
-            return_document=ReturnDocument.AFTER,
-        )
+        with _database_errors():
+            data = await self._documents.find_one_and_update(
+                {"id": document.id},
+                {"$set": {"name": document.name, "updated_at": updated_at}},
+                return_document=ReturnDocument.AFTER,
+            )
         return from_mongo(data) if data else None
 
     async def delete(self, document_id: int) -> bool:
-        result = await self._documents.delete_one({"id": document_id})
+        with _database_errors():
+            result = await self._documents.delete_one({"id": document_id})
         return result.deleted_count == 1
 
     async def _next_id(self) -> int:

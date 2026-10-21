@@ -23,3 +23,14 @@ class DocumentNotFoundError(DocumentError):
     def __init__(self, document_id: int) -> None:
         super().__init__(f"No existe un documento con id {document_id}.")
         self.document_id = document_id
+
+
+class DatabaseUnavailableError(DocumentError):
+    """MongoDB no responde (HTTP 503).
+
+    La lanza el repositorio cuando falla la conexión con la base, para que
+    las capas de arriba no dependan de las excepciones de PyMongo.
+    """
+
+    def __init__(self) -> None:
+        super().__init__("La base de datos no está disponible; reintentar más tarde.")

@@ -4,8 +4,8 @@ from pydantic import BaseModel
 class ProblemDetail(BaseModel):
     """Cuerpo de error según RFC 9457 (application/problem+json).
 
-    Los exception handlers que mapean las excepciones de dominio a este
-    formato se implementan en el issue #8.
+    Todas las respuestas de error del servicio usan este formato; los
+    handlers que lo arman están en `app/errors.py`.
     """
 
     type: str = "about:blank"
