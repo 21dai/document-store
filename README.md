@@ -9,8 +9,9 @@ En desarrollo.
 El contrato HTTP está definido en [`docs/api-contract.md`](docs/api-contract.md)
 (Issue #1) y la arquitectura inicial del servicio ya está implementada
 (Issue #2). Ya funcionan la persistencia en MongoDB (#3), el alta (#4), las
-consultas con paginación (#5), la actualización del nombre (#6) y el borrado
-(#7).
+consultas con paginación (#5), la actualización del nombre (#6), el borrado
+(#7) y el manejo de errores (#8). La imagen Docker, el healthcheck y el CI
+están configurados (#9).
 
 ## Responsabilidad
 
@@ -89,15 +90,17 @@ document-store/
 ├── tests/
 │   ├── unit/
 │   └── integration/
-│       └── test_health.py
 ├── docs/
 │   └── api-contract.md    # contrato HTTP (Issue #1)
-├── main.py                # entrypoint de conveniencia para desarrollo
+├── .github/workflows/
+│   └── ci.yml             # lint, tests, build Docker y smoke test (Issue #9)
+├── main.py                # entrypoint: uvicorn con HOST y PORT de la config
 ├── pyproject.toml
 ├── uv.lock
 ├── .python-version        # 3.14
 ├── .env.example
 ├── .gitignore
+├── .dockerignore
 ├── Dockerfile
 └── README.md
 ```
@@ -302,8 +305,9 @@ Variables disponibles:
 
 - [uv](https://docs.astral.sh/uv/) instalado (`uv` gestiona automáticamente
   Python 3.14, definido en `.python-version`).
-- MongoDB disponible en `DATABASE_URL` para los endpoints de documentos
+- MongoDB 7 disponible en `DATABASE_URL` para los endpoints de documentos
   (el `/health` no lo requiere).
+- Docker, solo para construir y correr la imagen.
 
 ### Instalación
 
@@ -313,34 +317,61 @@ uv sync
 
 ### Ejecución
 
-Con uvicorn (recomendado):
+Con uvicorn y recarga automática:
 
 ```bash
 uv run uvicorn app.main:app --reload
 ```
 
-O mediante el entrypoint de conveniencia:
+O mediante el entrypoint, que toma `HOST`, `PORT` y `DEBUG` de la
+configuración (es lo que ejecuta la imagen Docker):
 
 ```bash
 uv run python main.py
 ```
 
-Luego verificá el healthcheck:
+## Healthcheck
+
+El servicio escucha en el puerto **8000** (configurable con `PORT`) y expone:
 
 ```bash
 curl http://localhost:8000/health
 # {"status":"ok"}
 ```
 
-### Docker
+`/health` es un chequeo de **liveness**: responde `200` mientras el proceso
+de la API esté vivo y **no depende de MongoDB**. Si la base no responde, la app
+arranca igual, `/health` sigue en `200`, los endpoints de documentos responden
+`503` y los índices se crean apenas MongoDB esté disponible. Por ahora no hay
+un endpoint de readiness que verifique la base.
+
+La imagen Docker define un `HEALTHCHECK` que consulta `/health` cada 30 s
+(timeout 3 s, 3 reintentos); el estado se ve con `docker ps` o
+`docker inspect --format '{{.State.Health.Status}}' <contenedor>`.
+
+## Docker
+
+La imagen se construye en dos etapas: instala las dependencias de producción
+con `uv` desde `uv.lock` y la imagen final (Python 3.14 slim) solo lleva el
+entorno virtual y el código de `app/`, sin `uv`, tests ni dependencias de
+extracción de PDF. Corre con un usuario sin privilegios y expone el puerto
+`8000`. Toda la configuración llega por variables de entorno.
 
 ```bash
 docker build -t document-store .
 docker run --rm -p 8000:8000 --env-file .env document-store
 ```
 
-La configuración completa de Docker, healthcheck y CI se aborda en el
-issue #9.
+`DATABASE_URL` tiene que apuntar a un MongoDB alcanzable **desde el
+contenedor**: `localhost` dentro del contenedor es el propio contenedor. Por
+ejemplo, con MongoDB en otro contenedor de la misma red:
+
+```bash
+docker network create document-store
+docker run -d --name mongo --network document-store mongo:7-jammy
+docker run --rm -p 8000:8000 --network document-store \
+  -e DATABASE_URL=mongodb://mongo:27017 document-store
+```
 
 ## Tests
 
@@ -352,18 +383,46 @@ Los tests de persistencia usan un MongoDB real: cada test crea una base con
 nombre único y la borra al terminar. Por defecto se conectan a
 `mongodb://localhost:27017`; se puede cambiar con `TEST_DATABASE_URL`. Si no
 hay MongoDB, esos tests se saltean con un aviso (con `REQUIRE_MONGO=1`
-fallan, para CI). Para levantar uno descartable:
+fallan, como en CI). Para levantar uno descartable:
 
 ```bash
-docker run -d --rm --name document-store-test-mongo -p 27017:27017 mongo:7
+docker run -d --rm --name document-store-test-mongo -p 27017:27017 mongo:7-jammy
 ```
 
-El proyecto tendrá:
+Hay tests unitarios (modelo, schemas, servicio, configuración) y de
+integración (endpoints, repositorio contra MongoDB, manejo de errores,
+arranque de la app y `/health`).
 
-- tests unitarios para modelos, servicios y repositorios;
-- tests de integración para los endpoints;
-- tests relacionados con MongoDB;
-- tests para documentos duplicados y documentos inexistentes.
+## Calidad de código
+
+El lint y el formato se verifican con [Ruff](https://docs.astral.sh/ruff/)
+(reglas `E`, `F`, `I`, `UP`, `B` y `ASYNC`, configuradas en `pyproject.toml`):
+
+```bash
+uv run ruff check .
+uv run ruff format --check .
+```
+
+Para corregir automáticamente:
+
+```bash
+uv run ruff check --fix .
+uv run ruff format .
+```
+
+## Integración continua
+
+El workflow [`.github/workflows/ci.yml`](.github/workflows/ci.yml) corre en
+cada push a `main` y en cada Pull Request:
+
+1. **Lint y tests**: instala Python y `uv`, las dependencias (`uv sync
+   --locked`), verifica lint y formato con Ruff y corre `pytest` contra un
+   MongoDB levantado como servicio (`REQUIRE_MONGO=1`, así que ningún test
+   se saltea).
+2. **Build Docker y smoke test**: construye la imagen, la levanta junto a un
+   MongoDB y verifica que `/health` responda `200`, que el `HEALTHCHECK` de
+   la imagen llegue a `healthy` y que se pueda crear y consultar un
+   documento.
 
 ## Dependencias entre servicios
 
