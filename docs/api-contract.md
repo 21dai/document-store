@@ -32,12 +32,15 @@ Responsabilidades:
 ```json
 {
   "type": "about:blank",
-  "title": "Document not found",
+  "title": "Not Found",
   "status": 404,
   "detail": "No existe un documento con id 42.",
-  "instance": "/api/v1/documents/42"
+  "instance": "http://localhost:8000/api/v1/documents/42"
 }
 ```
+
+`title` es la frase estándar del código HTTP y `detail` explica el caso
+concreto. Ver [Errores comunes](#errores-comunes) para la lista completa.
 
 ### Formato del checksum
 
@@ -256,7 +259,41 @@ DELETE /api/v1/documents/{document_id}
 
 | Código | Situación |
 |---|---|
+| `400 Bad Request` | El id no es un entero positivo |
 | `404 Not Found` | No existe un documento con ese ID |
+
+## Errores comunes
+
+Los errores se manejan de forma centralizada (`app/errors.py`) y todos usan
+Problem Details, también los de FastAPI y los no previstos. Además de los
+errores propios de cada endpoint:
+
+| Código | Cuándo |
+|---|---|
+| `400 Bad Request` | Datos inválidos en el body, el id de la ruta o los parámetros de consulta (validación estricta) |
+| `404 Not Found` | No existe un documento con ese id, o la ruta no existe |
+| `405 Method Not Allowed` | El método no está permitido en esa ruta (incluye el header `Allow`) |
+| `409 Conflict` | Ya existe un documento con el mismo `checksum` |
+| `500 Internal Server Error` | Error no previsto; el detalle es genérico y no expone mensajes internos |
+| `503 Service Unavailable` | MongoDB no responde (sin `Retry-After`: es una caída, no una carga pasajera) |
+
+- **No se usa `422 Unprocessable Entity`**: la validación es estricta con
+  Pydantic y responde `400`. OpenAPI tampoco documenta el `422` por defecto
+  de FastAPI.
+- Los endpoints de documentos documentan el `503` en OpenAPI; `/health` no
+  usa MongoDB y no lo responde.
+
+Excepciones de dominio (`app/exceptions.py`) y su código HTTP:
+
+| Excepción | Código |
+|---|---|
+| `DocumentNotFoundError` | `404` |
+| `DocumentAlreadyExistsError` | `409` |
+| `DatabaseUnavailableError` (la lanza el repositorio si MongoDB no responde) | `503` |
+
+Los datos inválidos no tienen excepción de dominio propia: se validan en el
+borde, con los schemas de Pydantic, antes de llegar al service, y responden
+`400`.
 
 ## Modelo de persistencia
 

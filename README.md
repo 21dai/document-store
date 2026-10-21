@@ -124,7 +124,9 @@ Endpoints:
 ### Crear un documento
 
 ```bash
-curl -X POST http://localhost:8000/api/v1/documents \n  -H "Content-Type: application/json" \n  -d '{"name": "Filosofia Lean", "original_filename": "Filosofia Lean.pdf",
+curl -X POST http://localhost:8000/api/v1/documents \
+  -H "Content-Type: application/json" \
+  -d '{"name": "Filosofia Lean", "original_filename": "Filosofia Lean.pdf",
        "checksum": "<sha256 de 64 caracteres hex en minúsculas>",
        "file_size": 734000, "page_count": 42,
        "extracted_text": "Texto extraído...", "is_processed": true}'
@@ -205,6 +207,35 @@ elimina correctamente. El `document_id` debe ser un entero positivo.
 | `204 No Content` | El documento existía y fue eliminado |
 | `400 Bad Request` | El id no es un entero positivo |
 | `404 Not Found` | No existe un documento con ese id |
+
+### Errores
+
+Todas las respuestas de error, incluidas las que arma FastAPI y las no
+previstas, usan **RFC 9457 Problem Details** (`application/problem+json`):
+
+```json
+{
+  "type": "about:blank",
+  "title": "Not Found",
+  "status": 404,
+  "detail": "No existe un documento con id 42.",
+  "instance": "http://localhost:8000/api/v1/documents/42"
+}
+```
+
+| Código | Cuándo |
+|---|---|
+| `400 Bad Request` | Datos inválidos en el body, el id de la ruta o los parámetros de consulta (validación estricta) |
+| `404 Not Found` | No existe un documento con ese id, o la ruta no existe |
+| `405 Method Not Allowed` | El método no está permitido en esa ruta (incluye el header `Allow`) |
+| `409 Conflict` | Ya existe un documento con el mismo `checksum` |
+| `500 Internal Server Error` | Error no previsto; el detalle es genérico y no expone mensajes internos |
+| `503 Service Unavailable` | MongoDB no responde (sin `Retry-After`: es una caída, no una carga pasajera) |
+
+El servicio **nunca responde `422`**: la validación es estricta y los datos
+inválidos salen como `400`, por eso el `422` que FastAPI agrega por defecto
+tampoco aparece en `/docs`. Cualquier endpoint de documentos puede responder
+`503` si MongoDB no está disponible; `/health` no depende de la base.
 
 El contrato HTTP completo (requests, responses, errores y reglas de negocio)
 está documentado en [`docs/api-contract.md`](docs/api-contract.md) (Issue #1).
