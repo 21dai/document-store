@@ -88,9 +88,10 @@ def test_openapi_documenta_el_contrato_del_put(api_client: TestClient) -> None:
     assert operation["requestBody"]["content"]["application/json"]["schema"] == {
         "$ref": "#/components/schemas/DocumentUpdate"
     }
-    assert specification["components"]["schemas"]["DocumentUpdate"][
-        "additionalProperties"
-    ] is False
+    assert (
+        specification["components"]["schemas"]["DocumentUpdate"]["additionalProperties"]
+        is False
+    )
 
 
 @pytest.mark.parametrize("document_id", ["abc", "0", "-5", "1.5"])
@@ -98,9 +99,7 @@ def test_actualizar_con_id_invalido_responde_400_problem_details(
     api_client: TestClient,
     document_id: str,
 ) -> None:
-    response = api_client.put(
-        f"{URL}/{document_id}", json={"name": "Nuevo nombre"}
-    )
+    response = api_client.put(f"{URL}/{document_id}", json={"name": "Nuevo nombre"})
 
     assert_problem_details(
         response,

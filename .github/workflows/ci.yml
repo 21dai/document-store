@@ -1,0 +1,96 @@
+# Pipeline de calidad (issue #9). Corre en cada push a main y en cada PR:
+#   1. lint y formato (ruff, en modo verificación)
+#   2. tests unitarios e integración contra un MongoDB real (REQUIRE_MONGO=1:
+#      si la base no responde, los tests fallan en lugar de saltearse)
+#   3. build de la imagen Docker, HEALTHCHECK de la imagen y smoke test de
+#      /health y del alta y consulta de un documento contra MongoDB
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint-y-tests:
+    name: Lint y tests
+    runs-on: ubuntu-latest
+    services:
+      mongo:
+        image: mongo:7-jammy
+        ports:
+          - 27017:27017
+        options: >-
+          --health-cmd "mongosh --quiet --eval 'db.adminCommand({ ping: 1 }).ok'"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: mongodb://localhost:27017
+      REQUIRE_MONGO: "1"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+      - run: uv python install
+      - run: uv sync --locked
+      - name: Ruff (lint)
+        run: uv run ruff check .
+      - name: Ruff (formato)
+        run: uv run ruff format --check .
+      - name: Pytest
+        run: uv run pytest
+
+  docker:
+    name: Build Docker y smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build
+        run: docker build -t document-store:ci .
+      - name: Levantar MongoDB y la imagen
+        run: |
+          docker network create smoke
+          docker run -d --name mongo --network smoke mongo:7-jammy
+          for i in $(seq 1 30); do
+            if docker exec mongo mongosh --quiet --eval "db.adminCommand({ ping: 1 }).ok"; then break; fi
+            sleep 1
+          done
+          # --health-interval corto para no esperar los 30 s del HEALTHCHECK
+          # de la imagen; el comando que se prueba es el mismo.
+          docker run -d --name app --network smoke -p 8000:8000 \
+            --health-interval=2s \
+            -e DATABASE_URL=mongodb://mongo:27017 \
+            -e DATABASE_NAME=document_store \
+            document-store:ci
+      - name: Smoke test de /health
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8000/health; then echo; exit 0; fi
+            sleep 1
+          done
+          echo "/health no respondió a tiempo"; exit 1
+      - name: HEALTHCHECK de la imagen
+        run: |
+          for i in $(seq 1 30); do
+            estado=$(docker inspect --format '{{.State.Health.Status}}' app)
+            echo "estado: $estado"
+            if [ "$estado" = "healthy" ]; then exit 0; fi
+            sleep 2
+          done
+          echo "el contenedor no llegó a healthy"; exit 1
+      - name: Smoke test de alta y consulta de un documento
+        run: |
+          checksum=$(echo -n "smoke" | sha256sum | cut -d' ' -f1)
+          curl -fsS -X POST http://127.0.0.1:8000/api/v1/documents \
+            -H "Content-Type: application/json" \
+            -d "{\"name\": \"Smoke\", \"original_filename\": \"smoke.pdf\", \"checksum\": \"$checksum\", \"file_size\": 1, \"page_count\": 1, \"extracted_text\": \"hola\", \"is_processed\": true}" \
+            -o creado.json
+          id=$(python3 -c "import json; print(json.load(open('creado.json'))['id'])")
+          curl -fsS http://127.0.0.1:8000/api/v1/documents/$id
+          echo
+      - if: always()
+        run: docker logs app || true
+      - if: always()
+        run: docker rm -f app mongo || true

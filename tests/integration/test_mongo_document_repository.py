@@ -160,9 +160,7 @@ async def test_update_persiste_y_devuelve_solo_el_nombre_y_updated_at_modificado
         updated_at=original_timestamp,
     )
     created = await repository.create(original)
-    monkeypatch.setattr(
-        mongo_document_repository, "utc_now", lambda: updated_timestamp
-    )
+    monkeypatch.setattr(mongo_document_repository, "utc_now", lambda: updated_timestamp)
 
     candidate = replace(
         created,
@@ -179,9 +177,7 @@ async def test_update_persiste_y_devuelve_solo_el_nombre_y_updated_at_modificado
 
     updated = await repository.update(candidate)
 
-    expected = replace(
-        created, name="nombre actualizado", updated_at=updated_timestamp
-    )
+    expected = replace(created, name="nombre actualizado", updated_at=updated_timestamp)
     assert updated == expected
     assert await repository.get_by_id(created.id) == expected
 
