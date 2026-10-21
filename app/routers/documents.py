@@ -1,14 +1,12 @@
 from typing import Annotated, Any
 
-from fastapi import APIRouter, HTTPException, Path, Query, status
+from fastapi import APIRouter, Path, Query, status
 
 from app.dependencies import DocumentServiceDep
 from app.schemas.document import DocumentCreate, DocumentResponse, DocumentUpdate
 from app.schemas.error import ProblemDetail
 
 router = APIRouter(prefix="/documents", tags=["documents"])
-
-_NOT_IMPLEMENTED_DETAIL = "Este endpoint se implementa en un issue posterior (#7)."
 
 #: Id de documento en la ruta: entero positivo (si no, 400).
 DocumentId = Annotated[int, Path(gt=0, description="Id entero del documento")]
@@ -99,13 +97,11 @@ async def update_document(
     "/{document_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Eliminar un documento",
+    responses={**_BAD_REQUEST, **_NOT_FOUND},
 )
 async def delete_document(
     document_id: DocumentId,
     service: DocumentServiceDep,
 ) -> None:
-    # Issue #7: Implementar eliminación.
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail=_NOT_IMPLEMENTED_DETAIL,
-    )
+    """Elimina el documento con ese id, o responde 404 si no existe."""
+    await service.delete_document(document_id)

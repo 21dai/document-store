@@ -9,8 +9,8 @@ En desarrollo.
 El contrato HTTP está definido en [`docs/api-contract.md`](docs/api-contract.md)
 (Issue #1) y la arquitectura inicial del servicio ya está implementada
 (Issue #2). Ya funcionan la persistencia en MongoDB (#3), el alta (#4), las
-consultas con paginación (#5) y la actualización del nombre (#6). El borrado
-queda pendiente para el Issue #7.
+consultas con paginación (#5), la actualización del nombre (#6) y el borrado
+(#7).
 
 ## Responsabilidad
 
@@ -119,7 +119,7 @@ Endpoints:
 | GET | `/api/v1/documents` | Listar documentos (implementado) |
 | GET | `/api/v1/documents/{document_id}` | Obtener un documento (implementado) |
 | PUT | `/api/v1/documents/{document_id}` | Actualizar el nombre (implementado) |
-| DELETE | `/api/v1/documents/{document_id}` | Eliminar un documento (pendiente #7) |
+| DELETE | `/api/v1/documents/{document_id}` | Eliminar un documento (implementado) |
 
 ### Crear un documento
 
@@ -189,6 +189,21 @@ asigna `updated_at` en UTC con precisión de milisegundos.
 |---|---|
 | `200 OK` | Se actualizó el nombre y el cuerpo contiene el documento completo |
 | `400 Bad Request` | El id no es un entero positivo, el JSON o el nombre son inválidos, o hay campos adicionales |
+| `404 Not Found` | No existe un documento con ese id |
+
+### Eliminar un documento
+
+```bash
+curl -i -X DELETE http://localhost:8000/api/v1/documents/1
+```
+
+La respuesta `204 No Content` no contiene cuerpo cuando el documento se
+elimina correctamente. El `document_id` debe ser un entero positivo.
+
+| Respuesta | Cuándo |
+|---|---|
+| `204 No Content` | El documento existía y fue eliminado |
+| `400 Bad Request` | El id no es un entero positivo |
 | `404 Not Found` | No existe un documento con ese id |
 
 El contrato HTTP completo (requests, responses, errores y reglas de negocio)
