@@ -8,7 +8,7 @@ from app.schemas.error import ProblemDetail
 
 router = APIRouter(prefix="/documents", tags=["documents"])
 
-_NOT_IMPLEMENTED_DETAIL = "Este endpoint se implementa en un issue posterior (#6 y #7)."
+_NOT_IMPLEMENTED_DETAIL = "Este endpoint se implementa en un issue posterior (#7)."
 
 #: Id de documento en la ruta: entero positivo (si no, 400).
 DocumentId = Annotated[int, Path(gt=0, description="Id entero del documento")]
@@ -81,18 +81,18 @@ async def get_document(
 @router.put(
     "/{document_id}",
     response_model=DocumentResponse,
+    status_code=status.HTTP_200_OK,
     summary="Actualizar campos editables de un documento",
+    responses={**_BAD_REQUEST, **_NOT_FOUND},
 )
 async def update_document(
     document_id: DocumentId,
     payload: DocumentUpdate,
     service: DocumentServiceDep,
 ) -> DocumentResponse:
-    # Issue #6: Implementar actualización.
-    raise HTTPException(
-        status_code=status.HTTP_501_NOT_IMPLEMENTED,
-        detail=_NOT_IMPLEMENTED_DETAIL,
-    )
+    """Actualiza el nombre y devuelve el documento completo."""
+    document = await service.update_document(document_id, payload)
+    return DocumentResponse.model_validate(document)
 
 
 @router.delete(

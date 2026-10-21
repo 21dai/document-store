@@ -77,10 +77,10 @@ class MongoDocumentRepository(DocumentRepository):
         return [from_mongo(data) async for data in cursor]
 
     async def update(self, document: Document) -> Document | None:
-        document.updated_at = utc_now()
+        updated_at = utc_now()
         data = await self._documents.find_one_and_update(
             {"id": document.id},
-            {"$set": {"name": document.name, "updated_at": document.updated_at}},
+            {"$set": {"name": document.name, "updated_at": updated_at}},
             return_document=ReturnDocument.AFTER,
         )
         return from_mongo(data) if data else None

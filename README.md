@@ -8,8 +8,9 @@ En desarrollo.
 
 El contrato HTTP está definido en [`docs/api-contract.md`](docs/api-contract.md)
 (Issue #1) y la arquitectura inicial del servicio ya está implementada
-(Issue #2). Ya funcionan la persistencia en MongoDB (#3), el alta (#4) y las
-consultas con paginación (#5); la actualización y el borrado llegan en #6 y #7.
+(Issue #2). Ya funcionan la persistencia en MongoDB (#3), el alta (#4), las
+consultas con paginación (#5) y la actualización del nombre (#6). El borrado
+queda pendiente para el Issue #7.
 
 ## Responsabilidad
 
@@ -117,8 +118,8 @@ Endpoints:
 | POST | `/api/v1/documents` | Crear un documento (implementado) |
 | GET | `/api/v1/documents` | Listar documentos (implementado) |
 | GET | `/api/v1/documents/{document_id}` | Obtener un documento (implementado) |
-| PUT | `/api/v1/documents/{document_id}` | Actualizar un documento |
-| DELETE | `/api/v1/documents/{document_id}` | Eliminar un documento |
+| PUT | `/api/v1/documents/{document_id}` | Actualizar el nombre (implementado) |
+| DELETE | `/api/v1/documents/{document_id}` | Eliminar un documento (pendiente #7) |
 
 ### Crear un documento
 
@@ -148,6 +149,46 @@ curl "http://localhost:8000/api/v1/documents?skip=0&limit=10"
 |---|---|
 | `200 OK` | El documento, o la página de documentos **en orden de `id` ascendente** (lista vacía si no hay) |
 | `400 Bad Request` | El id no es un entero positivo, o `skip`/`limit` están fuera de rango (`skip >= 0`, `1 <= limit <= 100`) |
+| `404 Not Found` | No existe un documento con ese id |
+
+### Actualizar un documento
+
+Solo `name` es editable. Debe ser un string de hasta 255 caracteres después
+de quitar los espacios de los extremos; un nombre vacío o compuesto solo por
+espacios se rechaza. El body no admite campos adicionales, incluidos los campos
+protegidos del documento.
+
+```bash
+curl -X PUT http://localhost:8000/api/v1/documents/1 \
+  -H "Content-Type: application/json" \
+  -d '{"name": "  Nuevo nombre  "}'
+```
+
+Respuesta `200 OK`:
+
+```json
+{
+  "id": 1,
+  "name": "Nuevo nombre",
+  "original_filename": "Filosofia Lean.pdf",
+  "checksum": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "file_size": 734000,
+  "page_count": 42,
+  "extracted_text": "Texto extraído...",
+  "is_processed": true,
+  "created_at": "2026-10-14T12:00:00Z",
+  "updated_at": "2026-10-21T15:30:00Z"
+}
+```
+
+`id`, `checksum`, `original_filename`, `file_size`, `page_count`,
+`extracted_text`, `is_processed` y `created_at` se conservan. El servidor
+asigna `updated_at` en UTC con precisión de milisegundos.
+
+| Respuesta | Cuándo |
+|---|---|
+| `200 OK` | Se actualizó el nombre y el cuerpo contiene el documento completo |
+| `400 Bad Request` | El id no es un entero positivo, el JSON o el nombre son inválidos, o hay campos adicionales |
 | `404 Not Found` | No existe un documento con ese id |
 
 El contrato HTTP completo (requests, responses, errores y reglas de negocio)
