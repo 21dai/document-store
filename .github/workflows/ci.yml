@@ -2,8 +2,9 @@
 #   1. lint y formato (ruff, en modo verificación)
 #   2. tests unitarios e integración contra un MongoDB real (REQUIRE_MONGO=1:
 #      si la base no responde, los tests fallan en lugar de saltearse)
-#   3. build de la imagen Docker, HEALTHCHECK de la imagen y smoke test de
-#      /health y del alta y consulta de un documento contra MongoDB
+#   3. build de la imagen Docker, HEALTHCHECK de la imagen (contra /ready) y smoke test de
+#      /health, /ready y del alta y consulta de un documento contra MongoDB;
+#      después se detiene MongoDB: /ready tiene que dar 503 y la imagen, unhealthy
 name: CI
 
 on:
@@ -71,6 +72,13 @@ jobs:
             sleep 1
           done
           echo "/health no respondió a tiempo"; exit 1
+      - name: Smoke test de /ready con MongoDB arriba
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8000/ready; then echo; exit 0; fi
+            sleep 1
+          done
+          echo "/ready no respondió 200 a tiempo"; exit 1
       - name: HEALTHCHECK de la imagen
         run: |
           for i in $(seq 1 30); do
@@ -90,6 +98,28 @@ jobs:
           id=$(python3 -c "import json; print(json.load(open('creado.json'))['id'])")
           curl -fsS http://127.0.0.1:8000/api/v1/documents/$id
           echo
+      - name: Sin MongoDB, /ready responde 503 y el contenedor pasa a unhealthy
+        run: |
+          docker stop mongo
+          # /ready tarda hasta DATABASE_TIMEOUT_MS (3 s) en darse cuenta.
+          for i in $(seq 1 20); do
+            codigo=$(curl -s -o ready.json -w '%{http_code}' --max-time 10 http://127.0.0.1:8000/ready)
+            echo "/ready: $codigo"
+            if [ "$codigo" = "503" ]; then break; fi
+            sleep 1
+          done
+          if [ "$codigo" != "503" ]; then echo "/ready no respondió 503 sin MongoDB"; exit 1; fi
+          cat ready.json; echo
+          grep -q '"status":503' ready.json
+          # /health no depende de MongoDB: sigue en 200.
+          curl -fsS http://127.0.0.1:8000/health; echo
+          for i in $(seq 1 30); do
+            estado=$(docker inspect --format '{{.State.Health.Status}}' app)
+            echo "estado: $estado"
+            if [ "$estado" = "unhealthy" ]; then exit 0; fi
+            sleep 2
+          done
+          echo "el contenedor no pasó a unhealthy sin MongoDB"; exit 1
       - if: always()
         run: docker logs app || true
       - if: always()
