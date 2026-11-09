@@ -27,7 +27,8 @@ FROM python:3.14-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PATH="/app/.venv/bin:${PATH}"
+    PATH="/app/.venv/bin:${PATH}" \
+    PORT=8000
 
 WORKDIR /app
 
@@ -38,7 +39,8 @@ COPY --from=builder --chown=appuser:appgroup /app /app
 
 USER appuser
 
-EXPOSE 8000
+# Solo documentación: el puerto real lo define PORT (main.py lo lee de Settings).
+EXPOSE ${PORT}
 
 # /ready (readiness) hace ping a MongoDB: si la base no responde da 503 y el
 # contenedor pasa a unhealthy, así que el compose y Traefik no le mandan
