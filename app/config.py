@@ -16,6 +16,10 @@ class Settings(BaseSettings):
 
     host: str = "0.0.0.0"
     port: int = 8000
+    # Segundos que uvicorn espera las requests en curso al recibir SIGTERM
+    # (12-Factor IX). Tiene que ser menor que el stop_grace_period del
+    # compose (15 s): si no, Docker mata el proceso antes de que termine.
+    graceful_shutdown_seconds: int = 10
 
     api_v1_prefix: str = "/api/v1"
 

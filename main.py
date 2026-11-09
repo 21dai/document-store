@@ -1,9 +1,11 @@
-"""Entrypoint de conveniencia para desarrollo local.
+"""Punto de entrada del servicio, en local y en Docker.
 
-Uso: `uv run python main.py`
+Local: `uv run python main.py`. Docker: la imagen arranca con
+`CMD ["python", "main.py"]`.
 
-En producción o con Docker se recomienda invocar uvicorn directamente:
-`uvicorn app.main:app --host 0.0.0.0 --port 8000`
+Host, puerto, reload y el tiempo de apagado ordenado salen de la
+configuración (`HOST`, `PORT`, `DEBUG`, `GRACEFUL_SHUTDOWN_SECONDS`), así que
+se cambian con variables de entorno sin tocar el código ni la imagen.
 """
 
 import uvicorn
@@ -18,6 +20,7 @@ def main() -> None:
         host=settings.host,
         port=settings.port,
         reload=settings.debug,
+        timeout_graceful_shutdown=settings.graceful_shutdown_seconds,
     )
 
 
