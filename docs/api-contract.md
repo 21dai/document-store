@@ -21,6 +21,7 @@ Responsabilidades:
 - Actualizar campos editables.
 - Eliminar documentos.
 - Devolver errores HTTP consistentes en formato RFC 9457 (Problem Details).
+- Informar si está vivo (`/health`) y si puede atender (`/ready`).
 
 ## Convenciones generales
 
@@ -60,13 +61,14 @@ concreto. Ver [Errores comunes](#errores-comunes) para la lista completa.
 
 ## Endpoints
 
-### Healthcheck
+### Liveness
 
 ```
 GET /health
 ```
 
-Verifica que el servicio está activo. No requiere conexión a MongoDB.
+Verifica que el proceso está vivo. **No consulta MongoDB**: responde `200`
+aunque la base esté caída.
 
 **Respuesta `200 OK`:**
 
@@ -75,6 +77,48 @@ Verifica que el servicio está activo. No requiere conexión a MongoDB.
   "status": "ok"
 }
 ```
+
+---
+
+### Readiness
+
+```
+GET /ready
+```
+
+Verifica que el servicio puede atender: hace `ping` a MongoDB con la conexión
+de la aplicación. Es el endpoint del `HEALTHCHECK` de la imagen Docker, así que
+el compose y Traefik dejan de mandarle tráfico mientras la base no responda.
+
+**Respuesta `200 OK`:**
+
+```json
+{
+  "status": "ready"
+}
+```
+
+**Errores:**
+
+| Código | Situación |
+|---|---|
+| `503 Service Unavailable` | MongoDB no responde dentro de `DATABASE_TIMEOUT_MS` (3 s por defecto). Problem Details, sin `Retry-After` |
+
+```json
+{
+  "type": "about:blank",
+  "title": "Service Unavailable",
+  "status": 503,
+  "detail": "La base de datos no está disponible; reintentar más tarde.",
+  "instance": "http://localhost:8000/ready"
+}
+```
+
+| | `/health` (liveness) | `/ready` (readiness) |
+|---|---|---|
+| Consulta MongoDB | No | Sí (`ping`) |
+| MongoDB caído | `200` | `503` |
+| Lo usa | Diagnóstico | `HEALTHCHECK` de Docker, compose y Traefik |
 
 ---
 
@@ -275,13 +319,13 @@ errores propios de cada endpoint:
 | `405 Method Not Allowed` | El método no está permitido en esa ruta (incluye el header `Allow`) |
 | `409 Conflict` | Ya existe un documento con el mismo `checksum` |
 | `500 Internal Server Error` | Error no previsto; el detalle es genérico y no expone mensajes internos |
-| `503 Service Unavailable` | MongoDB no responde (sin `Retry-After`: es una caída, no una carga pasajera) |
+| `503 Service Unavailable` | MongoDB no responde (sin `Retry-After`: es una caída, no una carga pasajera). También `/ready` |
 
 - **No se usa `422 Unprocessable Entity`**: la validación es estricta con
   Pydantic y responde `400`. OpenAPI tampoco documenta el `422` por defecto
   de FastAPI.
-- Los endpoints de documentos documentan el `503` en OpenAPI; `/health` no
-  usa MongoDB y no lo responde.
+- Los endpoints de documentos y `/ready` documentan el `503` en OpenAPI;
+  `/health` no usa MongoDB y no lo responde.
 
 Excepciones de dominio (`app/exceptions.py`) y su código HTTP:
 

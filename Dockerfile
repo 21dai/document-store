@@ -27,7 +27,8 @@ FROM python:3.14-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PATH="/app/.venv/bin:${PATH}"
+    PATH="/app/.venv/bin:${PATH}" \
+    PORT=8000
 
 WORKDIR /app
 
@@ -38,12 +39,16 @@ COPY --from=builder --chown=appuser:appgroup /app /app
 
 USER appuser
 
-EXPOSE 8000
+# Solo documentación: el puerto real lo define PORT (main.py lo lee de Settings).
+EXPOSE ${PORT}
 
-# /health solo dice que el proceso está vivo: no depende de MongoDB. La imagen
-# slim no trae curl ni wget, así que se consulta con Python.
-HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-    CMD ["python", "-c", "import os, urllib.request; urllib.request.urlopen(f\"http://127.0.0.1:{os.environ.get('PORT', '8000')}/health\", timeout=2)"]
+# /ready (readiness) hace ping a MongoDB: si la base no responde da 503 y el
+# contenedor pasa a unhealthy, así que el compose y Traefik no le mandan
+# tráfico. El ping falla en DATABASE_TIMEOUT_MS (3 s): el timeout del
+# healthcheck tiene que ser mayor para recibir ese 503. La imagen slim no trae
+# curl ni wget, así que se consulta con Python.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD ["python", "-c", "import os, urllib.request; urllib.request.urlopen(f\"http://127.0.0.1:{os.environ.get('PORT', '8000')}/ready\", timeout=4)"]
 
 # main.py lanza uvicorn con HOST y PORT de la configuración (variables de
 # entorno), así que el puerto se puede cambiar sin tocar la imagen.
