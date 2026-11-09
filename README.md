@@ -292,7 +292,7 @@ Variables disponibles:
 | Variable | Default | Descripción |
 |---|---|---|
 | `APP_NAME` | `document-store` | Nombre de la aplicación |
-| `APP_VERSION` | `0.1.0` | Versión expuesta en OpenAPI |
+| `APP_VERSION` | `0.2.0` | Versión expuesta en OpenAPI |
 | `DEBUG` | `false` | Modo debug / recarga automática |
 | `HOST` | `0.0.0.0` | Host del servidor |
 | `PORT` | `8000` | Puerto del servidor. En Docker también lo usa el `HEALTHCHECK`: se cambia sin reconstruir la imagen |
