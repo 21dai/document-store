@@ -25,6 +25,7 @@ def test_los_valores_del_env_example_son_una_configuracion_valida() -> None:
 
     assert settings.port == 8000
     assert settings.database_name == "document_store"
+    assert settings.graceful_shutdown_seconds == 10
 
 
 def test_el_env_example_no_incluye_credenciales_de_mongodb() -> None:
