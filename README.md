@@ -94,7 +94,7 @@ document-store/
 │   └── api-contract.md    # contrato HTTP (Issue #1)
 ├── .github/workflows/
 │   └── ci.yml             # lint, tests, build Docker y smoke test (Issue #9)
-├── main.py                # entrypoint: uvicorn con HOST y PORT de la config
+├── main.py                # entrypoint: uvicorn con HOST, PORT, DEBUG y GRACEFUL_SHUTDOWN_SECONDS de la config
 ├── pyproject.toml
 ├── uv.lock
 ├── .python-version        # 3.14
@@ -295,7 +295,8 @@ Variables disponibles:
 | `APP_VERSION` | `0.1.0` | Versión expuesta en OpenAPI |
 | `DEBUG` | `false` | Modo debug / recarga automática |
 | `HOST` | `0.0.0.0` | Host del servidor |
-| `PORT` | `8000` | Puerto del servidor |
+| `PORT` | `8000` | Puerto del servidor. En Docker también lo usa el `HEALTHCHECK`: se cambia sin reconstruir la imagen |
+| `GRACEFUL_SHUTDOWN_SECONDS` | `10` | Segundos que uvicorn espera las requests en curso al recibir `SIGTERM` (12-Factor IX). Tiene que ser menor que el `stop_grace_period` del compose (15 s): si no, Docker mata el proceso antes de que cierre |
 | `API_V1_PREFIX` | `/api/v1` | Prefijo de la API |
 | `DATABASE_URL` | `mongodb://localhost:27017` | URI de conexión a MongoDB |
 | `DATABASE_NAME` | `document_store` | Nombre de la base de datos |
@@ -325,8 +326,9 @@ Con uvicorn y recarga automática:
 uv run uvicorn app.main:app --reload
 ```
 
-O mediante el entrypoint, que toma `HOST`, `PORT` y `DEBUG` de la
-configuración (es lo que ejecuta la imagen Docker):
+O mediante el entrypoint, que toma `HOST`, `PORT`, `DEBUG` y
+`GRACEFUL_SHUTDOWN_SECONDS` de la configuración (es lo que ejecuta la imagen
+Docker):
 
 ```bash
 uv run python main.py
@@ -367,12 +369,27 @@ reintentos). Con MongoDB caído el contenedor pasa a `unhealthy` y vuelve a
 La imagen se construye en dos etapas: instala las dependencias de producción
 con `uv` desde `uv.lock` y la imagen final (Python 3.14 slim) solo lleva el
 entorno virtual y el código de `app/`, sin `uv`, tests ni dependencias de
-extracción de PDF. Corre con un usuario sin privilegios y expone el puerto
-`8000`. Toda la configuración llega por variables de entorno.
+extracción de PDF. Corre con un usuario sin privilegios y arranca con
+`python main.py`. Toda la configuración llega por variables de entorno: el
+puerto es `ENV PORT=8000` por defecto (`EXPOSE ${PORT}` es solo
+documentación) y el `HEALTHCHECK` usa ese mismo `PORT`.
 
 ```bash
 docker build -t document-store .
 docker run --rm -p 8000:8000 --env-file .env document-store
+docker run --rm -p 9000:9000 -e PORT=9000 --env-file .env document-store   # otro puerto, misma imagen
+```
+
+**Apagado ordenado.** `python main.py` es el PID 1 y recibe el `SIGTERM` de
+`docker stop`: uvicorn deja de aceptar conexiones, espera las requests en curso
+hasta `GRACEFUL_SHUTDOWN_SECONDS` y el lifespan cierra el cliente de MongoDB.
+En los logs se ve:
+
+```text
+INFO:     Shutting down
+INFO:     Waiting for application shutdown.
+INFO:     Application shutdown complete.
+INFO:     Finished server process [1]
 ```
 
 `DATABASE_URL` tiene que apuntar a un MongoDB alcanzable **desde el
