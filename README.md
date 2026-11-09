@@ -117,7 +117,8 @@ Endpoints:
 
 | Método | Endpoint | Descripción |
 |---|---|---|
-| GET | `/health` | Verificar que el servicio está activo |
+| GET | `/health` | Liveness: el proceso está vivo (no toca MongoDB) |
+| GET | `/ready` | Readiness: MongoDB responde (`503` si no) |
 | POST | `/api/v1/documents` | Crear un documento (implementado) |
 | GET | `/api/v1/documents` | Listar documentos (implementado) |
 | GET | `/api/v1/documents/{document_id}` | Obtener un documento (implementado) |
@@ -238,7 +239,8 @@ previstas, usan **RFC 9457 Problem Details** (`application/problem+json`):
 El servicio **nunca responde `422`**: la validación es estricta y los datos
 inválidos salen como `400`, por eso el `422` que FastAPI agrega por defecto
 tampoco aparece en `/docs`. Cualquier endpoint de documentos puede responder
-`503` si MongoDB no está disponible; `/health` no depende de la base.
+`503` si MongoDB no está disponible, igual que `/ready`; `/health` no depende
+de la base.
 
 El contrato HTTP completo (requests, responses, errores y reglas de negocio)
 está documentado en [`docs/api-contract.md`](docs/api-contract.md) (Issue #1).
@@ -305,8 +307,8 @@ Variables disponibles:
 
 - [uv](https://docs.astral.sh/uv/) instalado (`uv` gestiona automáticamente
   Python 3.14, definido en `.python-version`).
-- MongoDB 7 disponible en `DATABASE_URL` para los endpoints de documentos
-  (el `/health` no lo requiere).
+- MongoDB 7 disponible en `DATABASE_URL` para los endpoints de documentos y
+  `/ready` (el `/health` no lo requiere).
 - Docker, solo para construir y correr la imagen.
 
 ### Instalación
@@ -330,23 +332,34 @@ configuración (es lo que ejecuta la imagen Docker):
 uv run python main.py
 ```
 
-## Healthcheck
+## Healthcheck: `/health` y `/ready`
 
-El servicio escucha en el puerto **8000** (configurable con `PORT`) y expone:
+El servicio expone dos chequeos, en el puerto `PORT` (8000 por defecto):
+
+| Endpoint | Pregunta | MongoDB caído | Quién lo usa |
+|---|---|---|---|
+| `/health` | **Liveness**: ¿el proceso está vivo? | `200 {"status":"ok"}`: no toca la base | Diagnóstico; un orquestador que reinicia procesos colgados |
+| `/ready` | **Readiness**: ¿puede atender? Hace `ping` a MongoDB | `503` Problem Details | El `HEALTHCHECK` de la imagen, y con él el compose y Traefik |
 
 ```bash
 curl http://localhost:8000/health
 # {"status":"ok"}
+curl http://localhost:8000/ready
+# {"status":"ready"}            con MongoDB arriba
+# 503 application/problem+json  con MongoDB caído:
+# {"type":"about:blank","title":"Service Unavailable","status":503,
+#  "detail":"La base de datos no está disponible; reintentar más tarde.","instance":".../ready"}
 ```
 
-`/health` es un chequeo de **liveness**: responde `200` mientras el proceso
-de la API esté vivo y **no depende de MongoDB**. Si la base no responde, la app
-arranca igual, `/health` sigue en `200`, los endpoints de documentos responden
-`503` y los índices se crean apenas MongoDB esté disponible. Por ahora no hay
-un endpoint de readiness que verifique la base.
+Si la base no responde, la app arranca igual: `/health` sigue en `200`, `/ready`
+y los endpoints de documentos responden `503`, y los índices se crean apenas
+MongoDB esté disponible. `/ready` usa la misma conexión de la app (no abre otra)
+y tarda como mucho `DATABASE_TIMEOUT_MS` (3 s) en darse cuenta.
 
-La imagen Docker define un `HEALTHCHECK` que consulta `/health` cada 30 s
-(timeout 3 s, 3 reintentos); el estado se ve con `docker ps` o
+La imagen Docker define un `HEALTHCHECK` contra `/ready` cada 30 s (timeout 5 s,
+mayor que esos 3 s, para recibir el `503` en lugar de cortar antes; 3
+reintentos). Con MongoDB caído el contenedor pasa a `unhealthy` y vuelve a
+`healthy` cuando la base responde. El estado se ve con `docker ps` o
 `docker inspect --format '{{.State.Health.Status}}' <contenedor>`.
 
 ## Docker
@@ -391,7 +404,7 @@ docker run -d --rm --name document-store-test-mongo -p 27017:27017 mongo:7-jammy
 
 Hay tests unitarios (modelo, schemas, servicio, configuración) y de
 integración (endpoints, repositorio contra MongoDB, manejo de errores,
-arranque de la app y `/health`).
+arranque de la app, `/health` y `/ready` con y sin MongoDB).
 
 ## Calidad de código
 
@@ -420,9 +433,11 @@ cada push a `main` y en cada Pull Request:
    MongoDB levantado como servicio (`REQUIRE_MONGO=1`, así que ningún test
    se saltea).
 2. **Build Docker y smoke test**: construye la imagen, la levanta junto a un
-   MongoDB y verifica que `/health` responda `200`, que el `HEALTHCHECK` de
-   la imagen llegue a `healthy` y que se pueda crear y consultar un
-   documento.
+   MongoDB y verifica que `/health` y `/ready` respondan `200`, que el
+   `HEALTHCHECK` de la imagen llegue a `healthy` y que se pueda crear y
+   consultar un documento. Después detiene MongoDB y verifica que `/ready`
+   responda `503`, que `/health` siga en `200` y que el contenedor pase a
+   `unhealthy`.
 
 ## Dependencias entre servicios
 
