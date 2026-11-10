@@ -39,3 +39,27 @@ def test_el_apagado_ordenado_se_configura_por_variable_de_entorno(
     monkeypatch.setenv("GRACEFUL_SHUTDOWN_SECONDS", "5")
 
     assert Settings(_env_file=None).graceful_shutdown_seconds == 5
+
+
+def test_el_cache_en_redis_viene_desactivado_por_defecto() -> None:
+    settings = Settings(_env_file=None)
+
+    # Sin REDIS_URL el servicio funciona igual que antes, sin cache.
+    assert settings.redis_url == ""
+    assert settings.cache_ttl_seconds == 300
+    # Corto: si Redis no responde, se lee de MongoDB sin hacer esperar al cliente.
+    assert settings.redis_timeout_ms == 500
+
+
+def test_el_cache_se_configura_por_variables_de_entorno(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("REDIS_URL", "redis://redis:6379/0")
+    monkeypatch.setenv("CACHE_TTL_SECONDS", "60")
+    monkeypatch.setenv("REDIS_TIMEOUT_MS", "200")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.redis_url == "redis://redis:6379/0"
+    assert settings.cache_ttl_seconds == 60
+    assert settings.redis_timeout_ms == 200
