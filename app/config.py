@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     """
 
     app_name: str = "document-store"
-    app_version: str = "0.1.0"
+    app_version: str = "0.2.0"
     debug: bool = False
 
     host: str = "0.0.0.0"
