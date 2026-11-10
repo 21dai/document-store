@@ -51,7 +51,9 @@ Service
     ↓
 Repository (interfaz ABC)
     ↓
-MongoDB (implementación con PyMongo async)
+CachedDocumentRepository (decorador: cache-aside en Redis)
+    ↓
+MongoDocumentRepository (PyMongo async) → MongoDB
 ```
 
 - **Router** (`app/routers/`): adapta HTTP, valida requests con schemas
@@ -61,7 +63,8 @@ MongoDB (implementación con PyMongo async)
   dependencias).
 - **Repository** (`app/repositories/`): define el puerto
   `DocumentRepository` (ABC) y su implementación `MongoDocumentRepository`
-  con PyMongo asíncrono.
+  con PyMongo asíncrono, envuelta por `CachedDocumentRepository`, que agrega
+  el cache en Redis (ver [Cache de documentos](#cache-de-documentos-redis)).
 - Las dependencias se arman en `app/dependencies.py` mediante `Depends` de
   FastAPI.
 
@@ -292,7 +295,7 @@ Variables disponibles:
 | Variable | Default | Descripción |
 |---|---|---|
 | `APP_NAME` | `document-store` | Nombre de la aplicación |
-| `APP_VERSION` | `0.2.0` | Versión expuesta en OpenAPI |
+| `APP_VERSION` | `0.3.0` | Versión expuesta en OpenAPI |
 | `DEBUG` | `false` | Modo debug / recarga automática |
 | `HOST` | `0.0.0.0` | Host del servidor |
 | `PORT` | `8000` | Puerto del servidor. En Docker también lo usa el `HEALTHCHECK`: se cambia sin reconstruir la imagen |
@@ -301,6 +304,40 @@ Variables disponibles:
 | `DATABASE_URL` | `mongodb://localhost:27017` | URI de conexión a MongoDB |
 | `DATABASE_NAME` | `document_store` | Nombre de la base de datos |
 | `DATABASE_TIMEOUT_MS` | `3000` | Timeout de conexión y de selección del servidor (ms) |
+| `REDIS_URL` | *(vacío)* | URL de Redis para el cache de documentos. Vacío = sin cache. En el stack: `redis://:<clave>@redis:6379/0` |
+| `CACHE_TTL_SECONDS` | `300` | Segundos que dura cada documento en el cache |
+| `REDIS_TIMEOUT_MS` | `500` | Timeout de Redis (ms): si no responde, se lee de MongoDB |
+
+## Cache de documentos (Redis)
+
+Patrón **Cache-Aside** con Redis como *backing service* (12-Factor IV): se
+activa con `REDIS_URL`, sin tocar el código. MongoDB sigue siendo la fuente de
+verdad; Redis solo guarda copias.
+
+| Operación | Qué hace con el cache |
+|---|---|
+| `GET /api/v1/documents/{id}` | Primero Redis (`documento:{id}`). Si no está, MongoDB y lo guarda con TTL |
+| `POST /api/v1/documents` | Guarda el documento creado (write-through): el primer `GET` ya sale del cache |
+| `PUT /api/v1/documents/{id}` | Guarda el documento renombrado; si el id no existe, invalida la entrada |
+| `DELETE /api/v1/documents/{id}` | Invalida la entrada, aunque el borrado falle |
+| `GET /api/v1/documents` (listar) | No usa cache: cada alta o borrado cambia las páginas |
+
+Diseño:
+
+- **Decorador del repositorio** (`CachedDocumentRepository`): envuelve al de
+  MongoDB con la misma interfaz, así que el service no sabe que el cache
+  existe (OCP y DIP de SOLID). Sin `REDIS_URL`, el decorador usa un cache nulo.
+- **Nunca es un punto de falla:** si Redis no responde, se registra un warning
+  y se lee de MongoDB, con un timeout corto (`REDIS_TIMEOUT_MS`).
+- **TTL** (`CACHE_TTL_SECONDS`): si una invalidación se pierde (Redis caído
+  justo en ese momento), el dato viejo dura como mucho ese tiempo.
+
+Para verlo funcionar en el stack de `infrastructure`:
+
+```bash
+docker exec redis sh -c 'redis-cli --no-auth-warning -a "$REDIS_PASSWORD" keys "documento:*"'
+docker exec redis sh -c 'redis-cli --no-auth-warning -a "$REDIS_PASSWORD" ttl documento:1'
+```
 
 ## Desarrollo local
 
