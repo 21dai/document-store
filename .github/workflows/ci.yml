@@ -5,6 +5,7 @@
 #   3. build de la imagen Docker, HEALTHCHECK de la imagen (contra /ready) y smoke test de
 #      /health, /ready y del alta y consulta de un documento contra MongoDB;
 #      después se detiene MongoDB: /ready tiene que dar 503 y la imagen, unhealthy
+#   4. vulnerabilidades conocidas en las dependencias (pip-audit sobre el uv.lock)
 name: CI
 
 on:
@@ -124,3 +125,17 @@ jobs:
         run: docker logs app || true
       - if: always()
         run: docker rm -f app mongo || true
+
+  dependencias:
+    name: Vulnerabilidades en las dependencias
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: astral-sh/setup-uv@v7
+      # Mismo paso que pdf-extractext: pip-audit contra la base de vulnerabilidades
+      # de PyPI (OSV), sobre las versiones exactas del uv.lock y sin las de desarrollo
+      # (son las que van en la imagen). Falla si alguna tiene una vulnerabilidad conocida.
+      - name: pip-audit sobre las versiones exactas del uv.lock
+        run: |
+          uv export --no-hashes --no-dev --no-emit-project --format requirements-txt -o requirements.txt
+          uvx pip-audit -r requirements.txt --no-deps --disable-pip

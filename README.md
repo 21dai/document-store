@@ -492,6 +492,10 @@ cada push a `main` y en cada Pull Request:
    consultar un documento. Después detiene MongoDB y verifica que `/ready`
    responda `503`, que `/health` siga en `200` y que el contenedor pase a
    `unhealthy`.
+3. **Vulnerabilidades en las dependencias** (desarrollo seguro): `pip-audit`
+   revisa las versiones exactas del `uv.lock` (sin las de desarrollo, que no
+   van en la imagen) contra la base de vulnerabilidades de PyPI y falla si
+   alguna tiene una conocida. Mismo paso que pdf-extractext y el orquestador.
 
 ## Dependencias entre servicios
 
