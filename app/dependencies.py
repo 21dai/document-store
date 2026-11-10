@@ -3,7 +3,9 @@ from typing import Annotated
 from fastapi import Depends, Request
 from pymongo.asynchronous.database import AsyncDatabase
 
+from app.cache.document_cache import DocumentCache
 from app.config import Settings, get_settings
+from app.repositories.cached_document_repository import CachedDocumentRepository
 from app.repositories.document_repository import DocumentRepository
 from app.repositories.mongo_document_repository import MongoDocumentRepository
 from app.services.document_service import DocumentService
@@ -19,9 +21,19 @@ def get_database(request: Request) -> AsyncDatabase:
 DatabaseDep = Annotated[AsyncDatabase, Depends(get_database)]
 
 
-def get_document_repository(database: DatabaseDep) -> DocumentRepository:
-    """Inyecta la implementación Mongo del puerto DocumentRepository (DIP)."""
-    return MongoDocumentRepository(database)
+def get_document_cache(request: Request) -> DocumentCache:
+    """Devuelve el cache creado en el lifespan (desactivado sin `REDIS_URL`)."""
+    return request.app.state.document_cache
+
+
+DocumentCacheDep = Annotated[DocumentCache, Depends(get_document_cache)]
+
+
+def get_document_repository(
+    database: DatabaseDep, cache: DocumentCacheDep
+) -> DocumentRepository:
+    """Inyecta el repositorio de MongoDB envuelto en el cache (DIP + decorador)."""
+    return CachedDocumentRepository(MongoDocumentRepository(database), cache)
 
 
 DocumentRepositoryDep = Annotated[DocumentRepository, Depends(get_document_repository)]

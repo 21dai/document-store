@@ -9,6 +9,7 @@ from pymongo import AsyncMongoClient
 from pymongo.asynchronous.database import AsyncDatabase
 from pymongo.errors import PyMongoError
 
+from app.cache.document_cache import build_document_cache
 from app.config import Settings, get_settings
 from app.errors import register_error_handlers
 from app.repositories.mongo_document_repository import ensure_indexes
@@ -51,6 +52,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     database = client[settings.database_name]
     app.state.mongo_client = client
     app.state.mongo_db = database
+    # Crear el cliente de Redis no se conecta: si Redis no está, la app
+    # arranca igual y cada operación del cache se ignora.
+    document_cache = build_document_cache(settings)
+    app.state.document_cache = document_cache
 
     retry_task: asyncio.Task[None] | None = None
     try:
@@ -65,6 +70,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             retry_task.cancel()
             with contextlib.suppress(asyncio.CancelledError):
                 await retry_task
+        await document_cache.aclose()
         await client.close()
 
 

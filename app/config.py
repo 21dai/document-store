@@ -30,6 +30,15 @@ class Settings(BaseSettings):
     database_name: str = "document_store"
     database_timeout_ms: int = 3000
 
+    # Cache de documentos en Redis (patrón Cache-Aside, ver app/cache/). Vacío
+    # = sin cache. Es un backing service (12-Factor IV): se enchufa con la URL.
+    redis_url: str = ""
+    # Vencimiento de cada entrada: acota cuánto dura un dato viejo si se pierde
+    # una invalidación.
+    cache_ttl_seconds: int = 300
+    # Corto: si Redis no responde, se lee de MongoDB sin hacer esperar al cliente.
+    redis_timeout_ms: int = 500
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
 
